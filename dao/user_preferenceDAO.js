@@ -36,10 +36,11 @@ class UserPreferenceDAO {
                 throw err;
             }
             waterfall([
-                getPreferenceIdByTitle(connection, preference, callback),
-                addPreference(connection,preference,callback),
-                mapUserByPreference,
+                (callback) => getPreferenceIdByTitle(connection, preference, callback),
+                (existingPreferenceId, callback) => addPreference(connection, preference, existingPreferenceId, callback),
+                (preferenceId, callback) => mapUserByPreference(connection, user_id, preferenceId, callback),
             ], function (err, result) {
+                connection.rollback();
                 return callback(err, result);
             });
 
@@ -59,28 +60,24 @@ class UserPreferenceDAO {
             });
         }
 
-        function addPreference(err, preference, preference_id, callback) {
-            if (err) {
-                return callback(err);
+        function addPreference(connection, newPreference, existingPreferenceId, callback) {          
+            if (existingPreferenceId) {
+                return callback(err, existingPreferenceId);
             }
-            if (preference_id !== undefined && preference_id !== null) {
-                PreferenceDAO.insertPreference(connection, preference, function (err, preference_id) {
-                    if (err || preference_id === null) {
-                        console.error(err !== null ? err : "");
-                        connection.rollback(function () {
-                            throw err;
-                        });
-                    } else {
-                        return callback(err, preference_id);
-                    }
-                });
-            }
-            else {
-                return callback(err, preference_id);
-            }
+
+            PreferenceDAO.insertPreference(connection, preference, function (err, preference_id) {
+                if (err || preference_id === null) {
+                    console.error(err !== null ? err : "");
+                    connection.rollback(function () {
+                        throw err;
+                    });
+                } else {
+                    return callback(err, preference_id);
+                }
+            });
         }
 
-        function mapUserByPreference(arg1, callback) {
+        function mapUserByPreference(connection, userId, prefernceId, callback) {
             connection.query("INSERT INTO user_preference SET ?",
                 {
                     user_vk_id: user_id,
